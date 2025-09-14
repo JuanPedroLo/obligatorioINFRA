@@ -1,0 +1,6 @@
+admin|admin
+juan|1234
+jose|4321
+taller|2024
+taller2|5678
+
