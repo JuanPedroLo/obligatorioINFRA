@@ -301,3 +301,79 @@ venderProducto() {
     echo "TOTAL A PAGAR: \$${totalDeCompra}"
 }
 
+
+
+
+
+menuPrincipal () {
+
+while :
+do
+#Menu
+clear
+	#Menu 
+	echo " MENU Principal Ejercicio 1 "
+	echo "1. Usuario"
+	echo "2. Ingresar Producto"
+	echo "3. Vender Producto"
+	echo "4. Filtro de productos"
+	echo "5. Crear reporte de pinturas"
+	echo "6. Salir"
+
+
+	#Escoger menu
+	echo -n "Escoger opcion: "
+	read opcion
+
+	#Seleccion de menu, dentro se encuentran las funciones utilizadas
+
+
+	case $opcion in
+	1) 
+		echo "a. Crear Usuario"
+		echo "b. Cambiar contraseña"
+		echo "c. Login"
+		echo "d. Logout"
+		
+		echo -n "Escoger opcion: "
+		read opcionUser
+		
+		case $opcionUser in 
+		a)altausuario
+		b)cambiarPassword
+		c)login
+		d)logout
+		#queda pidiendo una variable que no voy a usar para que no vuelva al menu hasta darle enter
+		read foo
+		;;
+	2) 
+		echo "2. Ingresar producto"
+		ingresarProducto
+		read foo
+		;;
+	3) 
+		echo "3. Vender producto"
+		venderProducto
+		read foo
+		;;
+	4) 
+		echo "4. Filtro de productos"
+		filtrarProductos
+		read foo
+		;;
+	5) 
+		echo "5. Crear reporte de pinturas"
+		crearReporteDePinturas
+		read foo
+		;;
+	6) 
+		exit 0
+		;;
+	#Alerta
+	*)
+		echo "Opcion invalida..."
+		sleep 1
+	esac
+done
+
+}
