@@ -239,8 +239,7 @@ venderProducto() {
         awk -F"|" '{printf "%2d) %s - %s - $%s\n", NR, $2, $3, $6}' "$inventario"
 
         # Selección de producto
-        leerNoVacio "Ingrese el número del producto: "
-        numProd=$respuesta
+        numProd=$(verificarTextoNoVacio "Ingrese el número del producto:")
 
         # se obtiene la línea del producto elegido
         linea=$(sed -n "${numProd}p" "$inventario")
@@ -296,10 +295,90 @@ venderProducto() {
     for compra in "${compras[@]}"; do
         IFS="|" read -r codigo tipo modelo descripcion cantidad precio subtotal <<< "$compra"
         echo "- [$codigo] $tipo $modelo | Cantidad: $cantidad | Precio: \$${precio} | Subtotal: \$${subtotal}"
-        totalGeneral=$((totalGeneral + subtotal))
+        totalDeCompra=$((totalDeCompra + subtotal))
     done
     echo "TOTAL A PAGAR: \$${totalDeCompra}"
 }
+
+
+filtrarProductos(){
+	if [ -z "$loggedUser" ]; then
+        echo "Debe iniciar sesión para usar esta opción."
+        return
+    fi
+	
+	#con esto determinamos si existe el archivo y si no esta vacio(el -s determina si existe y si tiene un tamaño mayor a 0 bytes)
+	if [ ! -s "$inventario" ]; then
+        echo "No hay productos cargados."
+        return
+    fi
+		
+	#se le pide el filtro al usuario
+	echo "Filtrar por TIPO (Base, Layer, Shade, Dry, Contrast, Technical, Texture, Mediums). Si no ingresa nada se retornan todos:"
+    read -r filtro
+
+	#este if es para el caso de que venga vacio el filtro, deberia de mostrar todos los productos
+	if [ -z "$filtro" ]; then
+        # divide cada linea del inventario por los | para que a cada seccion del producto se la guarde en lugares separados
+        awk -F"|" '
+        BEGIN {
+            printf "%-3s %-10s %-22s %-38s %6s %8s\n","N°","Tipo","Modelo","Descripción","Stock","Precio"; 
+            print  "-----------------------------------------------------------------------------------------------"
+        }
+        { printf "%-3d %-10s %-22s %-38s %6d %8d\n", NR, $2, $3, $4, $5, $6 }
+        ' "$inventario"
+		#el primer printf se ejecuta una sola vez para poner la cabezera especifica para que el suaurio entienda que es cada cosa del producto
+		#el segundo printf se ejecuta para cada linea del archivo hasta que no queden mas productos 
+    else
+		#este else es cuando se le madna un filtro especifico para los productos
+		awk -F"|" -v f="$filtro" '
+        BEGIN {
+            printf "%-3s %-10s %-22s %-38s %6s %8s\n","N°","Tipo","Modelo","Descripción","Stock","Precio";
+            print  "-----------------------------------------------------------------------------------------------"
+        }
+        tolower($2) == tolower(f) {
+            hay=1
+            printf "%-3d %-10s %-22s %-38s %6d %8d\n", NR, $2, $3, $4, $5, $6
+        }
+        END {
+            if (!hay) print "No se encontraron productos de ese tipo."
+        }
+        ' "$inventario"
+		#el primer print es lo mismo que en el if 
+		#la condicion de tolower permite que el bloque solo se ejecute cuando el tipo de producto($2) coincida con el valor del filtro sin importar mayus/minus.
+		#agregamos una variable llamada hay que como es un awk la inicializa en 0 y en caso de encontrar un producto con ese tipo la va a pasar a 1, esta misma la usamos al final para determinar si hay o no productos con ese tipo
+    fi
+	
+}
+
+crearReporteDePinturas(){
+	if [ -z "$loggedUser" ]; then
+        echo "Debe iniciar sesión para usar esta opción."
+        return
+    fi
+	#se crea la carpeta datos en caso de que no exista, esto es en caso de querer correr el ejecutable en otra carpeta
+	mkdir -p "Datos"
+	#nombre que tiene el archvio en donde se guardan los datos
+	reporte="Datos/datos.CSV"
+	
+	#primera linea del archivo que muestra los nombres de las columnas del archivo
+	echo "codigo,tipo,modelo,descripcion,cantidad,precio" > "$reporte"
+	 
+	#en caso de que no haya ningun producto, se genera el archivo de datos solo con el encabezado
+	if [ ! -s "$inventario" ]; then
+        echo "Inventario vacío. Se generó el archivo con solo el encabezado."
+        return
+    fi
+	
+	#se divide cada linea del archivo por | y se van agregando hasta que no queden mas productos en el inventario
+	while IFS="|" read -r codigo tipo modelo descripcion cantidad precio; do
+        echo "$codigo,$tipo,$modelo,$descripcion,$cantidad,$precio" >> "$reporte"
+    done < "$inventario"
+	
+	#mensaje final para que el usuario sepa que se guardo el reporte
+	echo "Reporte creado correctamente en: $reporte"
+}
+
 
 
 
