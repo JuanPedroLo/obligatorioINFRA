@@ -11,7 +11,7 @@ chequearUsuario () {
 		#el -d te lo divide si aparece | y -f selecciona la columna
 		userinfile=$(echo $line | cut -d "|" -f 1)
 		#$1 es el rpimer parametro de la funcion
-		if [ $1 = $userinfile ]; 
+		if [ "$1" = "$userinfile" ]; 
 		then
 			existeUser=1
 		
@@ -144,18 +144,19 @@ logout () {
 
 #funcion auxiliar para verificar que el texto que pasa el usuario no esta vacio
 verificarTextoNoVacio () {
-    local valor=""
     local mensaje="$1"
+	local valor=""
 
     while true; do
-			echo "$mensaje"
-        read valor
+		#echo "$mensaje" >&2
+        read -r -p "$mensaje " valor < /dev/tty
         valor=$(echo "$valor" | xargs)  # quitar espacios al inicio y fin
         if [ -n "$valor" ]; then
-            echo "$valor"
+            #echo "$valor"
+			printf "%s" "$valor"
             return
         else
-            echo "No puede estar vacío. Intente nuevamente."
+            echo "No puede estar vacío. Intente nuevamente." >&2
         fi
     done
 }
@@ -166,14 +167,16 @@ validarEntero () {
     local mensaje="$1"
 
     while true; do
-        echo "$mensaje"
-        read valor
+        #echo "$mensaje"
+        #read valor
+		read -r -p "$mensaje " valor < /dev/tty
         valor=$(echo "$valor" | xargs)
         if [[ "$valor" =~ ^[0-9]+$ ]]; then
-            echo "$valor"
+            #echo "$valor"
+			printf "%s" "$valor"
             return
         else
-            echo "Debe ingresar un número entero positivo."
+            echo "Debe ingresar un número entero positivo.">&2
         fi
     done
 }
@@ -192,6 +195,8 @@ ingresarProducto () {
     while true; do
 		#se le manda a la funcion auxiliar para verificar su nio esta vacio loque ingreso
         tipo=$(verificarTextoNoVacio "Ingrese tipo de pintura (Base, Layer, Shade, Dry, Contrast, Technical, Texture, Mediums):")
+		#echo "Ingrese tipo de pintura (Base, Layer, Shade, Dry, Contrast, Technical, Texture, Mediums):"
+		#tipo=$(verificarTextoNoVacio)
 		#variable para que arranca en 0, en el caso de encontrar en la lista algun tipo que sea igual al que ingresa el usuario, para a valer 1
         esTipoValido=0
 		# se va comparando uno a uno el ingresado por el usuario con los del aray de validos
@@ -229,11 +234,24 @@ ingresarProducto () {
 
 
 venderProducto() {
+
+	if [ ! -s "$inventario" ]; then
+        echo "No hay productos disponibles."
+        return
+    fi
 	#primero que nada un array para los posibles productos que quiera comprar el usuario
     compras=() 
 
 
     while true; do
+		
+		stock_disponible=$(awk -F"|" '{if ($5+0 > 0) c++} END {print c}' "$inventario")
+
+		if [ -z "$stock_disponible" ] || [ "$stock_disponible" -eq 0 ]; then
+			echo "No quedan productos con stock disponible."
+			break
+		fi
+		
         echo "--Lista de productos--"
         # Se muestra unicamente en la lista de productos, los datos necesarios, el número, tipo, modelo y precio
         awk -F"|" '{printf "%2d) %s - %s - $%s\n", NR, $2, $3, $6}' "$inventario"
@@ -252,11 +270,18 @@ venderProducto() {
 		#se separan los datos de la linea que estaban divididos por |
         IFS="|" read -r codigo tipo modelo descripcion stock precio <<< "$linea"
 
+		if [ "$stock" -le 0 ]; then
+            echo "Sin stock disponible para este producto."
+            sleep 1
+            continue
+        fi
         
         while true; do
 			#se chequea si ingresa valor vacio
-            verificarTextoNoVacio "Ingrese la cantidad a comprar: "
-            cantidadCompra=$respuesta
+            #verificarTextoNoVacio "Ingrese la cantidad a comprar: "
+            #cantidadCompra=$respuesta
+			cantidadCompra=$(verificarTextoNoVacio "Ingrese la cantidad a comprar:")
+
 			#se hacen chequeos de si el valor eso valido, si es el valor es menor que 0 y si es menor o no al stock que hay del producto
             if ! [[ "$cantidadCompra" =~ ^[0-9]+$ ]]; then
                 echo "Debe ser un número válido."
@@ -278,8 +303,11 @@ venderProducto() {
         # se actualiza el stock en el inventario
         nuevoStock=$((stock - cantidadCompra))
         nuevaLinea="$codigo|$tipo|$modelo|$descripcion|$nuevoStock|$precio"
-        sed -i "${numProd}s/.*/$nuevaLinea/" "$inventario"
-
+        #sed -i "${numProd}s/.*/$nuevaLinea/" "$inventario"
+		
+		awk -v n="$numProd" -v repl="$nuevaLinea" 'NR==n{$0=repl} {print}' "$inventario" > "$inventario.tmp" && mv "$inventario.tmp" "$inventario"
+		sync
+		
         echo "Agregado: $cantidadCompra x $modelo (\$${subtotal})"
 
         # preguntar si quiere seguir comprando
@@ -288,16 +316,17 @@ venderProducto() {
             break
         fi
     done
-
-    echo "==== Resumen de compra ===="
-    totalDeCompra=0
-	#se le muestra al usuario todo lo que compro y se va sumando a un total y al final se lo muestra 
-    for compra in "${compras[@]}"; do
-        IFS="|" read -r codigo tipo modelo descripcion cantidad precio subtotal <<< "$compra"
-        echo "- [$codigo] $tipo $modelo | Cantidad: $cantidad | Precio: \$${precio} | Subtotal: \$${subtotal}"
-        totalDeCompra=$((totalDeCompra + subtotal))
-    done
-    echo "TOTAL A PAGAR: \$${totalDeCompra}"
+	if [ "${#compras[@]}" -gt 0 ]; then
+		echo "==== Resumen de compra ===="
+		totalDeCompra=0
+		#se le muestra al usuario todo lo que compro y se va sumando a un total y al final se lo muestra 
+		for compra in "${compras[@]}"; do
+			IFS="|" read -r codigo tipo modelo descripcion cantidad precio subtotal <<< "$compra"
+			echo "- [$codigo] $tipo $modelo | Cantidad: $cantidad | Precio: \$${precio} | Subtotal: \$${subtotal}"
+			totalDeCompra=$((totalDeCompra + subtotal))
+		done
+		echo "TOTAL A PAGAR: \$${totalDeCompra}"
+	fi
 }
 
 
@@ -408,51 +437,61 @@ clear
 
 
 	case $opcion in
-	1) 
-		echo "a. Crear Usuario"
-		echo "b. Cambiar contraseña"
-		echo "c. Login"
-		echo "d. Logout"
-		
-		echo -n "Escoger opcion: "
-		read opcionUser
-		
-		case $opcionUser in 
-		a)altausuario
-		b)cambiarPassword
-		c)login
-		d)logout
-		#queda pidiendo una variable que no voy a usar para que no vuelva al menu hasta darle enter
-		read foo
-		;;
-	2) 
-		echo "2. Ingresar producto"
+    1)
+        echo "a. Crear Usuario"
+        echo "b. Cambiar contraseña"
+        echo "c. Login"
+        echo "d. Logout"
+
+        echo -n "Escoger opción: "
+        read opcionUser
+
+        case $opcionUser in
+            a)
+                altausuario
+                ;;
+            b)
+                cambiarPassword
+                ;;
+            c)
+                login
+                ;;
+            d)
+                logout
+                ;;
+            *)
+                echo "Opción inválida"
+                ;;
+        esac  
+        read foo
+        ;;    
+    2)
+		echo "Ingreso de nuevo producto"
 		ingresarProducto
-		read foo
-		;;
-	3) 
-		echo "3. Vender producto"
-		venderProducto
-		read foo
-		;;
-	4) 
-		echo "4. Filtro de productos"
-		filtrarProductos
-		read foo
-		;;
-	5) 
-		echo "5. Crear reporte de pinturas"
-		crearReporteDePinturas
-		read foo
-		;;
-	6) 
-		exit 0
-		;;
-	#Alerta
-	*)
-		echo "Opcion invalida..."
-		sleep 1
+        read foo
+        ;;
+    3)
+        venderProducto
+        read foo
+        ;;
+    4)
+        filtrarProductos
+        read foo
+        ;;
+    5)
+        crearReporteDePinturas
+        read foo
+        ;;
+    6)
+        exit 0
+        ;;
+    *)
+        echo "Opción inválida..."
+        sleep 1
+        ;;
 	esac
 done
 
 }
+
+menuPrincipal
